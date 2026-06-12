@@ -170,6 +170,7 @@
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   gap: 2px;
+  touch-action: pan-y; /* 그리드 내 세로 스크롤은 허용 */
 }
 
 .ep-emoji-btn {
@@ -184,15 +185,15 @@
   align-items: center;
   justify-content: center;
   transition: background 0.1s;
-  position: relative;
-  touch-action: manipulation; /* 터치 시 스크롤 대신 클릭으로 인식 */
+  touch-action: none;  /* 버튼 자체의 touch는 JS에서 직접 처리 */
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
+  outline: none;  /* 포커스 링 제거 */
 }
 .ep-emoji-btn:hover { background: #f3f4f6; }
 .ep-emoji-btn.selected { background: #eef2ff; outline: 2px solid #6366f1; }
-.ep-emoji-btn:active { background: #e0e7ff; transform: scale(0.92); }
+.ep-emoji-btn:active { background: #e0e7ff; }
 
 .ep-remove-tab-body {
   display: flex;

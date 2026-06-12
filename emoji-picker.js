@@ -232,18 +232,31 @@ class EmojiPicker {
       const btn = document.createElement('button');
       btn.className = 'ep-emoji-btn' + (emoji === this.currentEmoji ? ' selected' : '');
       btn.textContent = emoji;
-      btn.title = emoji;
       btn.type = 'button';
+      btn.tabIndex = -1; // 포커스 시 자동 스크롤 방지
 
-      // 터치 환경: touchend로 처리해야 스크롤과 충돌 안 함
-      let touchMoved = false;
-      btn.addEventListener('touchstart', () => { touchMoved = false; }, { passive: true });
-      btn.addEventListener('touchmove',  () => { touchMoved = true;  }, { passive: true });
-      btn.addEventListener('touchend', e => {
-        if (!touchMoved) { e.preventDefault(); this._selectEmoji(emoji); }
+      // ── 마우스: mousedown에서 포커스(=자동 스크롤) 차단, click에서 선택 ──
+      btn.addEventListener('mousedown', e => e.preventDefault());
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        this._selectEmoji(emoji);
       });
-      // 마우스(데스크탑) 클릭
-      btn.addEventListener('click', () => this._selectEmoji(emoji));
+
+      // ── 터치: 이동 거리(8px) 기준으로 탭 vs 스크롤 판별 ──
+      let tx = 0, ty = 0;
+      btn.addEventListener('touchstart', e => {
+        tx = e.touches[0].clientX;
+        ty = e.touches[0].clientY;
+      }, { passive: true });
+      btn.addEventListener('touchend', e => {
+        const dx = Math.abs(e.changedTouches[0].clientX - tx);
+        const dy = Math.abs(e.changedTouches[0].clientY - ty);
+        if (dx < 8 && dy < 8) {           // 탭 (스크롤 아님)
+          e.preventDefault();              // 합성 click 이벤트 방지
+          e.stopPropagation();
+          this._selectEmoji(emoji);
+        }
+      }, { passive: false });
 
       grid.appendChild(btn);
     });
