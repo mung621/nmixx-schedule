@@ -1,6 +1,28 @@
 const RECENT_KEY = 'ep-recently-used';
 const RECENT_MAX = 16;
 
+// 카테고리별 SVG 아이콘 (outline 스타일, currentColor 상속)
+const EP_CAT_ICONS = {
+  '최근 사용':
+    `<circle cx="10" cy="10" r="7.5"/><polyline points="10,6 10,10 12.5,12.5"/>`,
+  '😀 사람 & 감정':
+    `<circle cx="10" cy="10" r="7.5"/><circle cx="7.5" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="12.5" cy="9.5" r="1" fill="currentColor" stroke="none"/><path d="M7 13q3 2.5 6 0"/>`,
+  '🐾 동물 & 자연':
+    `<path d="M4.5 16c0-3 1.5-7.5 5.5-10 4 2.5 5.5 7 5.5 10H4.5z"/><path d="M6.5 6c-1.5-1-1.5-3 0-3.5s2 .5 2 2M13.5 6c1.5-1 1.5-3 0-3.5s-2 .5-2 2"/>`,
+  '🍕 음식 & 음료':
+    `<path d="M7 2.5v7.5q0 3 3 3t3-3V2.5M7 6h6"/>`,
+  '✈️ 여행 & 장소':
+    `<path d="M2.5 13.5l3-1.5 3.5 3.5L17.5 4 7.5 9l-2-3z"/><path d="M6 15.5l-.5 3"/>`,
+  '⚽ 활동':
+    `<circle cx="10" cy="10" r="7.5"/><path d="M10 5.5l1.5 1.5v3L10 12.5l-1.5-1.5V7z"/><path d="M8.5 7L5 5.5M11.5 7L15 5.5M8.5 11L7 14M11.5 11L13 14"/>`,
+  '💡 사물':
+    `<path d="M10 2.5a5.5 5.5 0 013 10.1V15H7V12.6A5.5 5.5 0 0110 2.5z"/><line x1="8" y1="17" x2="12" y2="17"/><line x1="8.5" y1="18.5" x2="11.5" y2="18.5"/>`,
+  '❤️ 기호':
+    `<path d="M10 16.5C10 16.5 2.5 12 2.5 7.5a4 4 0 017.5-2 4 4 0 017.5 2c0 4.5-7.5 9-7.5 9z"/>`,
+  '🏳️ 국기':
+    `<line x1="5" y1="2.5" x2="5" y2="18"/><path d="M5 2.5l10 4L5 11V2.5z"/>`,
+};
+
 function getRecentEmojis() {
   try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; }
 }
@@ -112,12 +134,29 @@ class EmojiPicker {
       const body = document.createElement('div');
       body.className = 'ep-body';
 
-      const navItems = Object.entries(CATEGORY_ICONS);
-      navItems.forEach(([cat, icon], idx) => {
+      // ── Category nav bar (SVG 아이콘) ──
+      const navBar = document.createElement('div');
+      navBar.className = 'ep-cat-nav';
+      const body = document.createElement('div');
+      body.className = 'ep-body';
+
+      // 최근 사용 포함한 전체 nav 항목 구성
+      const hasRecent = getRecentEmojis().length > 0;
+      const navItems = [];
+      if (hasRecent) navItems.push(['최근 사용', EP_CAT_ICONS['최근 사용']]);
+      Object.keys(EMOJI_DATA).forEach(cat => {
+        navItems.push([cat, EP_CAT_ICONS[cat] || '']);
+      });
+
+      navItems.forEach(([cat, svgPaths], idx) => {
         const navBtn = document.createElement('button');
         navBtn.className = 'ep-cat-nav-btn' + (idx === 0 ? ' active' : '');
-        navBtn.textContent = icon;
         navBtn.title = cat;
+        navBtn.type = 'button';
+        navBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 20 20" fill="none"
+          stroke="currentColor" stroke-width="1.5"
+          stroke-linecap="round" stroke-linejoin="round">${svgPaths}</svg>`;
+        navBtn.addEventListener('mousedown', e => e.preventDefault());
         navBtn.addEventListener('click', () => {
           navBar.querySelectorAll('.ep-cat-nav-btn').forEach(b => b.classList.remove('active'));
           navBtn.classList.add('active');
@@ -136,7 +175,7 @@ class EmojiPicker {
       this._renderBody(body);
       picker.appendChild(body);
 
-      // Sync nav on scroll
+      // 스크롤 시 해당 카테고리 nav 버튼 활성화
       body.addEventListener('scroll', () => {
         const sections = body.querySelectorAll('[data-category]');
         let active = null;

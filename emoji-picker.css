@@ -87,31 +87,33 @@
 .ep-cat-nav {
   display: flex;
   align-items: center;
-  gap: 1px;
-  padding: 4px 8px;
+  justify-content: space-between;
+  padding: 5px 8px;
   border-bottom: 1px solid #f3f4f6;
   background: #fafafa;
-  overflow-x: auto;
-  scrollbar-width: none;
+  gap: 2px;
 }
-.ep-cat-nav::-webkit-scrollbar { display: none; }
 .ep-cat-nav-btn {
-  width: 28px;
-  height: 28px;
+  flex: 1;
+  min-width: 0;
+  height: 30px;
   border-radius: 6px;
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 15px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.1s;
-  flex-shrink: 0;
-  opacity: 0.5;
+  transition: background 0.1s, color 0.1s;
+  color: #c0c8d6;       /* 기본: 연한 회색 */
+  padding: 0;
 }
-.ep-cat-nav-btn:hover { background: #f0f0f0; opacity: 1; }
-.ep-cat-nav-btn.active { background: #eef2ff; opacity: 1; }
+.ep-cat-nav-btn svg { display: block; flex-shrink: 0; }
+.ep-cat-nav-btn:hover { background: #f3f4f6; color: #6b7280; }
+.ep-cat-nav-btn.active {
+  background: #eef2ff;
+  color: #6366f1;       /* 활성: 인디고 */
+}
 
 .ep-search-row {
   display: flex;
