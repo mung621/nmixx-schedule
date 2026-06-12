@@ -19,26 +19,29 @@ let state = {
     hiddenAlbumTypes: [],
     hiddenEventTypes: [],
     dateSort: 'asc',
-    showSalePeriod: true,   // false = 이벤트 기간 있는 이벤트 숨기기
-    showEventDate:  true,   // false = 이벤트 날짜 있는 이벤트 숨기기
-    open: { vendor: true, country: false, albumType: false, eventType: false }
+    showSalePeriod: true,
+    showEventDate:  true,
+    open: { vendor: false, country: false, albumType: false, eventType: false }
+  },
+  // 목록 뷰 전용 필터 (사이드바 필터와 독립)
+  listFilters: {
+    hiddenVendors:    [],
+    hiddenCountries:  [],
+    hiddenAlbumTypes: [],
+    hiddenEventTypes: [],
+    dateSort: 'asc'
   }
 };
 
 // ── Persistence ──
 function saveState() {
   const syncData = { events: state.events, labels: state.labels };
+  const FKEYS = ['hiddenVendors','hiddenCountries','hiddenAlbumTypes','hiddenEventTypes'];
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     ...syncData,
-    filters: {
-      hiddenVendors:    state.filters.hiddenVendors,
-      hiddenCountries:  state.filters.hiddenCountries,
-      hiddenAlbumTypes: state.filters.hiddenAlbumTypes,
-      hiddenEventTypes: state.filters.hiddenEventTypes,
-      dateSort: state.filters.dateSort
-    }
+    filters:     { ...Object.fromEntries(FKEYS.map(k=>[k,state.filters[k]])),     dateSort: state.filters.dateSort },
+    listFilters: { ...Object.fromEntries(FKEYS.map(k=>[k,state.listFilters[k]])), dateSort: state.listFilters.dateSort }
   }));
-  // Firebase 동기화 (sync.js가 로드된 경우)
   if (typeof syncSave === 'function') syncSave(syncData);
 }
 
@@ -48,11 +51,14 @@ function loadState() {
     if (!p) return;
     if (p.events) state.events = p.events;
     if (p.labels) Object.keys(p.labels).forEach(k => { if (state.labels[k]) state.labels[k] = p.labels[k]; });
+    const FKEYS = ['hiddenVendors','hiddenCountries','hiddenAlbumTypes','hiddenEventTypes'];
     if (p.filters) {
-      ['hiddenVendors','hiddenCountries','hiddenAlbumTypes','hiddenEventTypes'].forEach(k => {
-        if (Array.isArray(p.filters[k])) state.filters[k] = p.filters[k];
-      });
+      FKEYS.forEach(k => { if (Array.isArray(p.filters[k])) state.filters[k] = p.filters[k]; });
       if (p.filters.dateSort) state.filters.dateSort = p.filters.dateSort;
+    }
+    if (p.listFilters) {
+      FKEYS.forEach(k => { if (Array.isArray(p.listFilters[k])) state.listFilters[k] = p.listFilters[k]; });
+      if (p.listFilters.dateSort) state.listFilters.dateSort = p.listFilters.dateSort;
     }
   } catch(e) {}
 }
@@ -164,10 +170,46 @@ function resetFilters() {
   saveState(); renderSidebar(); renderContent();
 }
 
-function setDateSort(d)          { state.filters.dateSort = d;                      saveState(); renderSidebar(); renderContent(); }
-function toggleShowSalePeriod(cb){ state.filters.showSalePeriod = cb.checked;        saveState(); renderSidebar(); renderContent(); }
-function toggleShowEventDate(cb) { state.filters.showEventDate  = cb.checked;        saveState(); renderSidebar(); renderContent(); }
-function toggleFilterGroup(t)    { state.filters.open[t] = !state.filters.open[t];   renderSidebar(); }
+// ── 사이드바 필터 (캘린더 적용) ──
+function setDateSort(d)          { state.filters.dateSort = d;                     saveState(); renderSidebar(); renderContent(); }
+function toggleShowSalePeriod(cb){ state.filters.showSalePeriod = cb.checked;       saveState(); renderSidebar(); renderContent(); }
+function toggleShowEventDate(cb) { state.filters.showEventDate  = cb.checked;       saveState(); renderSidebar(); renderContent(); }
+function toggleFilterGroup(t)    { state.filters.open[t] = !state.filters.open[t]; renderSidebar(); }
+
+// ── 목록 전용 필터 (사이드바와 독립) ──
+function getListFilteredEvents() {
+  let evs = state.events.filter(ev => {
+    if (ev.vendor    && state.listFilters.hiddenVendors.includes(ev.vendor))        return false;
+    if (ev.country   && state.listFilters.hiddenCountries.includes(ev.country))     return false;
+    if (ev.albumType && state.listFilters.hiddenAlbumTypes.includes(ev.albumType))  return false;
+    if (ev.eventType && state.listFilters.hiddenEventTypes.includes(ev.eventType))  return false;
+    return true;
+  });
+  return evs.sort((a, b) => {
+    const ad = a.saleStart||a.eventDate||'', bd = b.saleStart||b.eventDate||'';
+    return state.listFilters.dateSort === 'desc' ? (bd<ad?-1:bd>ad?1:0) : (ad<bd?-1:ad>bd?1:0);
+  });
+}
+
+function isListFilterActive() {
+  return ['hiddenVendors','hiddenCountries','hiddenAlbumTypes','hiddenEventTypes'].some(k => state.listFilters[k].length > 0);
+}
+
+function toggleListFilterItem(type, value) {
+  const key = FM[type].key;
+  const arr = state.listFilters[key];
+  const i = arr.indexOf(value);
+  if (i === -1) arr.push(value); else arr.splice(i, 1);
+  saveState(); renderContent();
+}
+
+function resetListFilters() {
+  ['hiddenVendors','hiddenCountries','hiddenAlbumTypes','hiddenEventTypes'].forEach(k => state.listFilters[k] = []);
+  state.listFilters.dateSort = 'asc';
+  saveState(); renderContent();
+}
+
+function setListDateSort(d) { state.listFilters.dateSort = d; saveState(); renderContent(); }
 
 // ── Debounce ──
 function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
@@ -479,29 +521,30 @@ function moveMonth(d) {
   renderContent();
 }
 function goToday() { state.calendarYear=new Date().getFullYear(); state.calendarMonth=new Date().getMonth(); renderContent(); }
+function goHome()  { closeDetailPanel(); state.view='calendar'; state.calendarYear=new Date().getFullYear(); state.calendarMonth=new Date().getMonth(); render(); }
 function selectEvent(id) { state.selectedEventId=id; renderSidebar(); renderDetailPanel(id); }
 function handleDayClick(_ds) {}
 
 // ── List view ──
 function renderListHtml() {
-  const filtered = getFilteredEvents();
+  const filtered = getListFilteredEvents();   // 목록 전용 필터 사용
   const sel = state.listSelection;
 
-  // Compact filter bar
+  // 목록 전용 filter bar
   let filterBar = `<div class="list-filter-bar">`;
   filterBar += `<div class="list-filter-groups">`;
 
   const GL = { vendor:'판매처', country:'국가', albumType:'앨범', eventType:'형태' };
   Object.entries(GL).forEach(([type, title]) => {
     const { key, colors } = FM[type];
-    const hidden = state.filters[key];
+    const hidden = state.listFilters[key];   // listFilters 사용
     const labels = state.labels[type];
     filterBar += `<div class="lf-group"><span class="lf-title">${title}</span>`;
     labels.forEach(label => {
       const isHidden = hidden.includes(label);
       const c = getColor(colors, label);
       filterBar += `<label class="lf-chip-label ${isHidden?'faded':''}">
-        <input type="checkbox" class="lf-cb" ${isHidden?'':'checked'} onchange="toggleFilterItem('${type}','${label}')">
+        <input type="checkbox" class="lf-cb" ${isHidden?'':'checked'} onchange="toggleListFilterItem('${type}','${label}')">
         <span class="chip lf-chip" style="background:${c.bg};color:${c.color};border:1.5px solid ${c.border}">${label}</span>
       </label>`;
     });
@@ -511,9 +554,9 @@ function renderListHtml() {
   filterBar += `</div>`;
   filterBar += `<div class="lf-sort-row">
     <span class="lf-title">정렬</span>
-    <button class="sort-btn sm ${state.filters.dateSort==='asc'?'active':''}" onclick="setDateSort('asc')">오래된순</button>
-    <button class="sort-btn sm ${state.filters.dateSort==='desc'?'active':''}" onclick="setDateSort('desc')">최근순</button>
-    ${isFilterActive() ? `<button class="sort-btn sm danger" onclick="resetFilters()">초기화</button>` : ''}
+    <button class="sort-btn sm ${state.listFilters.dateSort==='asc'?'active':''}" onclick="setListDateSort('asc')">오래된순</button>
+    <button class="sort-btn sm ${state.listFilters.dateSort==='desc'?'active':''}" onclick="setListDateSort('desc')">최근순</button>
+    ${isListFilterActive() ? `<button class="sort-btn sm danger" onclick="resetListFilters()">초기화</button>` : ''}
   </div>`;
   filterBar += `</div>`;
 
@@ -891,9 +934,15 @@ function closeSidebarOnMobile() {
 window.addEventListener('DOMContentLoaded', () => { loadState(); render(); });
 
 Object.assign(window, {
-  moveMonth, goToday, setView, openAddModal, closeModal, submitEventForm,
+  moveMonth, goToday, goHome, setView, openAddModal, closeModal, submitEventForm,
   addNewLabel, selectEvent, deleteEvent, deleteEventFromPanel, handleDayClick,
-  toggleFilterItem, toggleAllFilter, resetFilters, setDateSort, toggleShowSalePeriod, toggleShowEventDate, toggleFilterGroup,
+  // 사이드바 필터
+  toggleFilterItem, toggleAllFilter, resetFilters, setDateSort,
+  toggleShowSalePeriod, toggleShowEventDate, toggleFilterGroup,
+  // 목록 전용 필터
+  toggleListFilterItem, resetListFilters, setListDateSort,
+  // 목록 선택/삭제
   toggleListSelect, toggleSelectAll, clearListSelection, deleteSelected,
+  // 패널/사이드바
   renderDetailPanel, closeDetailPanel, toggleSidebar
 });
