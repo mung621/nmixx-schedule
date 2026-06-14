@@ -1093,6 +1093,100 @@ body {
 }
 .btn-unlink:hover { background: #fee2e2; color: #dc2626; }
 
+/* ── 브레드크럼 / 프로젝트 메타 ── */
+.data-breadcrumb {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+  color: #111;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-project-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #6b7280;
+  flex-wrap: wrap;
+}
+.dpm-item strong { color: #111; font-weight: 600; }
+.dpm-sep { color: #d1d5db; }
+
+/* ── 판매처 카드 그리드 ── */
+.data-vendor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.data-vendor-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.data-vendor-card:hover {
+  border-color: #6366f1;
+  box-shadow: 0 4px 14px rgba(99,102,241,0.1);
+  transform: translateY(-2px);
+}
+
+.dvc-header { display: flex; align-items: center; justify-content: space-between; }
+
+.dvc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.dvc-stat { display: flex; flex-direction: column; gap: 2px; }
+.dvc-stat-label { font-size: 10px; color: #9ca3af; font-weight: 600; }
+.dvc-stat-val { font-size: 14px; font-weight: 700; color: #374151; }
+
+.dvc-progress-row { display: flex; align-items: center; gap: 8px; cursor: help; }
+.dvc-bar-track { flex: 1; height: 6px; background: #f3f4f6; border-radius: 99px; overflow: hidden; }
+.dvc-bar-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
+.dvc-rate { font-size: 11px; font-weight: 700; min-width: 34px; text-align: right; }
+
+.dvc-footer { font-size: 11px; color: #9ca3af; border-top: 1px solid #f3f4f6; padding-top: 8px; }
+
+/* ── 판매처 상세 히어로 통계 ── */
+.data-vendor-stats-hero {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.dvsh-stat {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: default;
+}
+.dvsh-stat.dvsh-over { background: #fff5f5; border-color: #fca5a5; }
+.dvsh-label { font-size: 11px; color: #6b7280; font-weight: 600; }
+.dvsh-value { font-size: 22px; font-weight: 700; color: #111; line-height: 1.2; }
+.dvsh-over .dvsh-value { color: #ef4444; }
+
+.dvsh-bar-wrap {
+  height: 8px;
+  background: #f3f4f6;
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: -6px;
+}
+.dvsh-bar-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
+
 /* ── 프로젝트 폼 ── */
 .pf-vendor-checks { display: flex; flex-wrap: wrap; gap: 8px; }
 .pf-vendor-check {
@@ -1109,12 +1203,17 @@ body {
 /* ── 반응형 (모바일) ── */
 @media (max-width: 768px) {
   .data-projects-grid { grid-template-columns: 1fr; }
+  .data-vendor-grid { grid-template-columns: 1fr 1fr; }
   .data-info-cards { grid-template-columns: repeat(2, 1fr); }
+  .data-vendor-stats-hero { grid-template-columns: repeat(2, 1fr); }
   .data-detail-nav { gap: 6px; }
-  .data-detail-title { font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .data-breadcrumb { font-size: 13px; }
   .data-table { font-size: 12px; }
   .data-table th, .data-table td { padding: 8px 10px; }
   .data-sales-input { width: 80px; }
   .data-event-select { max-width: 180px; font-size: 11px; }
-  .dic-value { font-size: 16px; }
+  .dvsh-value { font-size: 17px; }
+}
+@media (max-width: 480px) {
+  .data-vendor-grid { grid-template-columns: 1fr; }
 }
