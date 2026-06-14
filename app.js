@@ -1007,11 +1007,24 @@ function renderProjectDetailHtml(project) {
   const usedVendors = new Set(vendors.map(ve => ve.vendor));
   const availableVendors = state.labels.vendor.filter(v => !usedVendors.has(v));
 
+  const totalQty = Number(project.totalQty) || 0;
+  const totalMG  = vendors.reduce((sum, ve) => sum + (Number(ve.mg) || 0), 0);
+  const mgDetailTitle = vendors.length > 0
+    ? `총 MG수량: ${vendors.map(ve => `${ve.vendor}(${(Number(ve.mg)||0).toLocaleString()})`).join(' + ')} = ${totalMG.toLocaleString()}`
+    : '판매처를 추가하면 총 MG수량이 계산됩니다';
+  const qtyTitle = totalMG > 0
+    ? `제작수량(${totalQty.toLocaleString()}) vs 총 MG수량(${totalMG.toLocaleString()}) — 차이: ${(totalQty - totalMG).toLocaleString()}`
+    : '제작수량';
+
   const vendorCardsHtml = vendors.map(ve => {
     const s = calcVendorEntryStats(ve);
     const bc = getBarColor(s.rate);
     const c = getColor(VENDOR_COLORS, ve.vendor);
-    const rateTitle = s.mg > 0
+    const salesTitle  = s.salesDetail.length > 0
+      ? `판매량 계산: ${s.salesDetail.join(' + ')} = ${s.sales.toLocaleString()}`
+      : '판매 없음';
+    const remainTitle = `잔여수량: MG수량(${s.mg.toLocaleString()}) - 판매량(${s.sales.toLocaleString()}) = ${s.remaining.toLocaleString()}`;
+    const rateTitle   = s.mg > 0
       ? `소진률: 판매량(${s.sales.toLocaleString()}) ÷ MG수량(${s.mg.toLocaleString()}) × 100 = ${s.rate}%`
       : '판매 없음';
     return `<div class="data-vendor-card" onclick="selectVendorEntry('${ve.id}')">
@@ -1020,9 +1033,9 @@ function renderProjectDetailHtml(project) {
         <button class="btn-unlink" onclick="event.stopPropagation();deleteVendorEntry('${project.id}','${ve.id}')" title="판매처 삭제">✕</button>
       </div>
       <div class="dvc-stats">
-        <div class="dvc-stat"><div class="dvc-stat-label">MG수량</div><div class="dvc-stat-val">${s.mg.toLocaleString()}</div></div>
-        <div class="dvc-stat"><div class="dvc-stat-label">판매량</div><div class="dvc-stat-val" style="color:${s.sales>0?'#6366f1':'#9ca3af'}">${s.sales.toLocaleString()}</div></div>
-        <div class="dvc-stat"><div class="dvc-stat-label">잔여</div><div class="dvc-stat-val" style="color:${s.remaining<0?'#ef4444':'#374151'}">${s.remaining.toLocaleString()}</div></div>
+        <div class="dvc-stat" title="설정된 MG수량: ${s.mg.toLocaleString()}"><div class="dvc-stat-label">MG수량</div><div class="dvc-stat-val">${s.mg.toLocaleString()}</div></div>
+        <div class="dvc-stat" title="${salesTitle}"><div class="dvc-stat-label">판매량</div><div class="dvc-stat-val" style="color:${s.sales>0?'#6366f1':'#9ca3af'}">${s.sales.toLocaleString()}</div></div>
+        <div class="dvc-stat" title="${remainTitle}"><div class="dvc-stat-label">잔여</div><div class="dvc-stat-val" style="color:${s.remaining<0?'#ef4444':'#374151'}">${s.remaining.toLocaleString()}</div></div>
       </div>
       <div class="dvc-progress-row" title="${rateTitle}">
         <div class="dvc-bar-track"><div class="dvc-bar-fill" style="width:${Math.min(s.rate,100)}%;background:${bc}"></div></div>
@@ -1043,7 +1056,9 @@ function renderProjectDetailHtml(project) {
       </div>
     </div>
     <div class="data-project-meta">
-      <span class="dpm-item">📦 제작수량: <strong>${(Number(project.totalQty)||0).toLocaleString()}</strong></span>
+      <span class="dpm-item" title="${qtyTitle}">📦 제작수량: <strong>${totalQty.toLocaleString()}</strong></span>
+      <span class="dpm-sep">·</span>
+      <span class="dpm-item" title="${mgDetailTitle}">📊 총 MG수량: <strong>${totalMG.toLocaleString()}</strong></span>
       <span class="dpm-sep">·</span>
       <span class="dpm-item">🏪 판매처 ${vendors.length}개</span>
     </div>
