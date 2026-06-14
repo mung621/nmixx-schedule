@@ -128,12 +128,6 @@ class EmojiPicker {
       searchRow.appendChild(randomBtn);
       picker.appendChild(searchRow);
 
-      // ── Category nav bar ──
-      const navBar = document.createElement('div');
-      navBar.className = 'ep-cat-nav';
-      const body = document.createElement('div');
-      body.className = 'ep-body';
-
       // ── Category nav bar (SVG 아이콘) ──
       const navBar = document.createElement('div');
       navBar.className = 'ep-cat-nav';
