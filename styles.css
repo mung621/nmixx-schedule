@@ -1090,7 +1090,7 @@ body {
 .rate-tooltip {
   display: none;
   position: absolute;
-  bottom: calc(100% + 10px);
+  top: calc(100% + 10px);
   left: 50%;
   transform: translateX(-50%);
   background: #1f2937;
@@ -1109,11 +1109,11 @@ body {
 .rate-tooltip::after {
   content: '';
   position: absolute;
-  top: 100%;
+  bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
   border: 7px solid transparent;
-  border-top-color: #1f2937;
+  border-bottom-color: #1f2937;
 }
 .rate-tip-wrap:hover .rate-tooltip { display: block; }
 
