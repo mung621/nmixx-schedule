@@ -53,6 +53,7 @@ function initSync() {
           if (state.labels[k]) state.labels[k] = remote.labels[k];
         });
       }
+      if (remote.dataProjects) state.dataProjects = remote.dataProjects;
 
       // 열린 디테일 패널이 있으면 해당 이벤트 최신화
       const panel = document.getElementById('detail-panel');

@@ -2,10 +2,12 @@ const STORAGE_KEY = 'kpop-schedules';
 
 let state = {
   events: [],
+  dataProjects: [],
   view: 'calendar',
   calendarYear:  new Date().getFullYear(),
   calendarMonth: new Date().getMonth(),
   selectedEventId: null,
+  selectedProjectId: null,
   listSelection: [],   // IDs selected in list view for bulk delete
   labels: {
     vendor:    ['멬스', '사웨', '애플', '케이몬스터'],
@@ -35,7 +37,7 @@ let state = {
 
 // ── Persistence ──
 function saveState() {
-  const syncData = { events: state.events, labels: state.labels };
+  const syncData = { events: state.events, labels: state.labels, dataProjects: state.dataProjects || [] };
   const FKEYS = ['hiddenVendors','hiddenCountries','hiddenAlbumTypes','hiddenEventTypes'];
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     ...syncData,
@@ -51,6 +53,7 @@ function loadState() {
     if (!p) return;
     if (p.events) state.events = p.events;
     if (p.labels) Object.keys(p.labels).forEach(k => { if (state.labels[k]) state.labels[k] = p.labels[k]; });
+    if (p.dataProjects) state.dataProjects = p.dataProjects;
     const FKEYS = ['hiddenVendors','hiddenCountries','hiddenAlbumTypes','hiddenEventTypes'];
     if (p.filters) {
       FKEYS.forEach(k => { if (Array.isArray(p.filters[k])) state.filters[k] = p.filters[k]; });
@@ -436,9 +439,10 @@ function renderContent() {
     <div class="view-tabs">
       <button class="view-tab ${state.view==='calendar'?'active':''}" onclick="setView('calendar')">📅 캘린더</button>
       <button class="view-tab ${state.view==='list'?'active':''}" onclick="setView('list')">📋 목록</button>
+      <button class="view-tab ${state.view==='data'?'active':''}" onclick="setView('data')">📊 데이터</button>
     </div>
   `;
-  content.innerHTML = tabs + (state.view === 'calendar' ? renderCalendarHtml() : renderListHtml());
+  content.innerHTML = tabs + (state.view === 'calendar' ? renderCalendarHtml() : state.view === 'list' ? renderListHtml() : renderDataHtml());
 }
 
 function setView(v) {
@@ -631,6 +635,7 @@ function deleteSelected() {
 let modalPickers = {};
 let modalDtPickers = {};
 let currentEditId = null;
+let currentProjectEditId = null;
 
 function openAddModal(prefill = {}) {
   currentEditId = prefill.id || null;
@@ -912,6 +917,382 @@ function deleteEvent(id) {
   saveState(); closeDetailPanel(); render();
 }
 
+// ═══════════════════════════════════════════════════════════════
+// 데이터 프로젝트
+// ═══════════════════════════════════════════════════════════════
+
+function genProjectId() {
+  return 'dp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+function getProjectById(id) {
+  return (state.dataProjects || []).find(p => p.id === id);
+}
+
+// 판매처별 통계 계산
+function calcVendorStats(project) {
+  const stats = {};
+  (project.vendors || []).forEach(v => {
+    stats[v] = { mg: Number(project.vendorMG?.[v]) || 0, sales: 0, events: [] };
+  });
+  (project.linkedEventIds || []).forEach(eid => {
+    const ev = state.events.find(e => e.id === eid);
+    if (!ev || !ev.vendor || !stats[ev.vendor]) return;
+    const qty = Number(project.sales?.[eid]) || 0;
+    stats[ev.vendor].sales += qty;
+    stats[ev.vendor].events.push({ id: eid, name: ev.name || '(이름 없음)', emoji: ev.emoji, qty });
+  });
+  Object.values(stats).forEach(s => {
+    s.remaining = s.mg - s.sales;
+    s.rate = s.mg > 0 ? Math.round(s.sales / s.mg * 1000) / 10 : 0;
+  });
+  return stats;
+}
+
+// 판매처별 현황 tbody HTML
+function buildVendorStatsBodyHtml(project) {
+  if (!project.vendors || project.vendors.length === 0) return '';
+  const stats = calcVendorStats(project);
+  return project.vendors.map(v => {
+    const s = stats[v] || { mg: 0, sales: 0, remaining: 0, rate: 0, events: [] };
+    const barColor = s.rate > 90 ? '#ef4444' : s.rate > 70 ? '#f59e0b' : '#10b981';
+    const c = getColor(VENDOR_COLORS, v);
+    const evDetail = s.events.length > 0
+      ? s.events.map(e => `${e.name}(${e.qty.toLocaleString()})`).join(' + ') + ` = ${s.sales.toLocaleString()}`
+      : '판매 없음';
+    const salesTitle = `판매량 계산: ${evDetail}`;
+    const remainTitle = `잔여수량: MG수량(${s.mg.toLocaleString()}) - 판매량(${s.sales.toLocaleString()}) = ${s.remaining.toLocaleString()}`;
+    const rateTitle = `소진률: 판매량(${s.sales.toLocaleString()}) ÷ MG수량(${s.mg.toLocaleString()}) × 100 = ${s.rate}%`;
+    return `<tr>
+      <td><span class="chip" style="background:${c.bg};color:${c.color};border:1.5px solid ${c.border}">${v}</span></td>
+      <td class="data-num-cell" title="MG수량 (${v})">${s.mg.toLocaleString()}</td>
+      <td class="data-num-cell" title="${salesTitle}">${s.sales.toLocaleString()}</td>
+      <td class="data-num-cell ${s.remaining < 0 ? 'data-over' : ''}" title="${remainTitle}">${s.remaining.toLocaleString()}</td>
+      <td>
+        <div class="data-rate-wrap" title="${rateTitle}">
+          <span class="data-rate-pct" style="color:${barColor}">${s.rate}%</span>
+          <div class="data-bar-wrap"><div class="data-bar-fill" style="width:${Math.min(s.rate, 100)}%;background:${barColor}"></div></div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// 요약 카드 HTML
+function buildProjectSummaryHtml(project) {
+  const stats = calcVendorStats(project);
+  const totalMG = Object.values(stats).reduce((s, v) => s + v.mg, 0);
+  const totalSales = Object.values(stats).reduce((s, v) => s + v.sales, 0);
+  return `
+    <div class="data-info-cards">
+      <div class="data-info-card">
+        <div class="dic-label">제작수량</div>
+        <div class="dic-value">${(Number(project.totalQty) || 0).toLocaleString()}</div>
+      </div>
+      <div class="data-info-card">
+        <div class="dic-label">연결 이벤트</div>
+        <div class="dic-value">${(project.linkedEventIds || []).length}개</div>
+      </div>
+      <div class="data-info-card" title="전체 판매처 MG 합계">
+        <div class="dic-label">총 MG수량</div>
+        <div class="dic-value">${totalMG.toLocaleString()}</div>
+      </div>
+      <div class="data-info-card" title="전체 판매처 판매량 합계">
+        <div class="dic-label">총 판매량</div>
+        <div class="dic-value" style="color:${totalSales > totalMG && totalMG > 0 ? '#ef4444' : '#10b981'}">${totalSales.toLocaleString()}</div>
+      </div>
+    </div>`;
+}
+
+// 데이터 뷰 (프로젝트 목록)
+function renderDataHtml() {
+  if (state.selectedProjectId) {
+    const project = getProjectById(state.selectedProjectId);
+    if (project) return renderProjectDetailHtml(project);
+    state.selectedProjectId = null;
+  }
+
+  const projects = state.dataProjects || [];
+
+  const headerHtml = `
+    <div class="data-view-header">
+      <button class="btn btn-primary btn-sm" onclick="openAddProjectModal()">＋ 새 프로젝트</button>
+    </div>`;
+
+  if (projects.length === 0) {
+    return `<div class="data-view">${headerHtml}
+      <div class="empty-state">
+        <div class="empty-state-icon">📊</div>
+        <div class="empty-state-title">데이터 프로젝트가 없습니다</div>
+        <div class="empty-state-desc">새 프로젝트 버튼을 눌러 등록해보세요</div>
+      </div></div>`;
+  }
+
+  const cardsHtml = projects.map(project => {
+    const stats = calcVendorStats(project);
+    const barsHtml = (project.vendors || []).map(v => {
+      const s = stats[v] || { rate: 0 };
+      const barColor = s.rate > 90 ? '#ef4444' : s.rate > 70 ? '#f59e0b' : '#10b981';
+      return `<div class="dpc-bar-row">
+        <span class="dpc-bar-vendor">${v}</span>
+        <div class="dpc-bar-track"><div class="dpc-bar-fill" style="width:${Math.min(s.rate, 100)}%;background:${barColor}"></div></div>
+        <span class="dpc-bar-pct" style="color:${barColor}">${s.rate}%</span>
+      </div>`;
+    }).join('');
+    return `<div class="data-project-card" onclick="selectProject('${project.id}')">
+      <div class="dpc-name">${project.name || '(이름 없음)'}</div>
+      <div class="dpc-total">제작수량 <strong>${(Number(project.totalQty) || 0).toLocaleString()}</strong></div>
+      <div class="dpc-chips">${(project.vendors || []).map(v => chipHtml(v, VENDOR_COLORS)).join('')}</div>
+      <div class="dpc-bars">${barsHtml}</div>
+      <div class="dpc-footer">${(project.linkedEventIds || []).length}개 이벤트 연결됨</div>
+    </div>`;
+  }).join('');
+
+  return `<div class="data-view">${headerHtml}<div class="data-projects-grid">${cardsHtml}</div></div>`;
+}
+
+// 프로젝트 상세 뷰
+function renderProjectDetailHtml(project) {
+  const linkedIds = new Set(project.linkedEventIds || []);
+  const availableEvents = state.events.filter(e => !linkedIds.has(e.id));
+  const stats = calcVendorStats(project);
+
+  const eventsBodyHtml = (project.linkedEventIds || []).map(eid => {
+    const ev = state.events.find(e => e.id === eid);
+    if (!ev) return '';
+    const qty = project.sales?.[eid] ?? '';
+    const c = ev.vendor ? getColor(VENDOR_COLORS, ev.vendor) : null;
+    const vendorChip = c ? `<span class="chip" style="background:${c.bg};color:${c.color};border:1.5px solid ${c.border}">${ev.vendor}</span>` : '-';
+    const vStats = ev.vendor ? stats[ev.vendor] : null;
+    const contribPct = vStats && vStats.mg > 0 && qty !== '' ? Math.round(Number(qty) / vStats.mg * 100) : null;
+    const inputTitle = contribPct !== null
+      ? `이 이벤트 기여율: ${Number(qty).toLocaleString()} ÷ ${vStats.mg.toLocaleString()} × 100 = ${contribPct}%`
+      : '판매량을 입력하세요 (마우스를 올리면 기여율 확인)';
+    return `<tr>
+      <td><span class="event-emoji-badge">${ev.emoji || '📅'}</span> <strong>${ev.name || '(이름 없음)'}</strong></td>
+      <td>${vendorChip}</td>
+      <td><input type="number" class="data-sales-input" value="${qty}" min="0" placeholder="판매량"
+            title="${inputTitle}"
+            onchange="updateEventSales('${project.id}','${eid}',this.value)"></td>
+      <td><button class="btn-unlink" onclick="unlinkEventFromProject('${project.id}','${eid}')" title="연결 해제">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  const eventSelectHtml = availableEvents.length > 0 ? `
+    <select class="data-event-select" onchange="linkEventFromSelect('${project.id}',this)">
+      <option value="">＋ 이벤트 추가</option>
+      ${availableEvents.map(e => `<option value="${e.id}">${e.emoji || '📅'} ${e.name || '(이름 없음)'}${e.vendor ? ' (' + e.vendor + ')' : ''}</option>`).join('')}
+    </select>` : '';
+
+  const vendorTableHtml = project.vendors && project.vendors.length > 0 ? `
+    <table class="data-table">
+      <thead><tr>
+        <th>판매처</th>
+        <th title="설정된 MG수량">MG수량</th>
+        <th title="이벤트 판매량 합계 (마우스 올리면 계산식)">판매량</th>
+        <th title="MG수량 - 판매량 (마우스 올리면 계산식)">잔여수량</th>
+        <th title="판매량 / MG수량 × 100 (마우스 올리면 계산식)">소진률</th>
+      </tr></thead>
+      <tbody id="data-vendor-stats-${project.id}">${buildVendorStatsBodyHtml(project)}</tbody>
+    </table>` : `<div class="data-empty-msg">수정 버튼에서 판매처를 추가해주세요</div>`;
+
+  const eventsTableHtml = (project.linkedEventIds || []).length > 0 ? `
+    <table class="data-table">
+      <thead><tr><th>이벤트명</th><th>판매처</th><th title="마우스 올리면 이 이벤트의 기여율 확인">판매량 (장)</th><th></th></tr></thead>
+      <tbody>${eventsBodyHtml}</tbody>
+    </table>` : `<div class="data-empty-msg">이벤트를 추가해주세요</div>`;
+
+  return `<div class="data-view data-detail-active">
+    <div class="data-detail-nav">
+      <button class="btn btn-secondary btn-sm" onclick="backToProjects()">‹ 목록으로</button>
+      <h2 class="data-detail-title">${project.name || '(이름 없음)'}</h2>
+      <div class="data-detail-actions">
+        <button class="btn btn-secondary btn-sm" onclick="openEditProjectModal('${project.id}')">✏ 수정</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProject('${project.id}')">🗑 삭제</button>
+      </div>
+    </div>
+    <div class="data-detail-body">
+      <div id="data-summary-${project.id}">${buildProjectSummaryHtml(project)}</div>
+      <div class="data-section">
+        <div class="data-section-title">판매처별 현황</div>
+        ${vendorTableHtml}
+      </div>
+      <div class="data-section">
+        <div class="data-section-header">
+          <div class="data-section-title">연결된 이벤트</div>
+          ${eventSelectHtml}
+        </div>
+        ${eventsTableHtml}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── 데이터 프로젝트 액션 ──
+function selectProject(id) {
+  state.selectedProjectId = id;
+  renderContent();
+}
+
+function backToProjects() {
+  state.selectedProjectId = null;
+  renderContent();
+}
+
+function updateEventSales(projectId, eventId, value) {
+  const project = getProjectById(projectId);
+  if (!project) return;
+  if (!project.sales) project.sales = {};
+  const qty = parseInt(value, 10);
+  if (isNaN(qty) || qty < 0) delete project.sales[eventId];
+  else project.sales[eventId] = qty;
+  saveState();
+
+  // 입력 포커스 유지를 위해 통계 영역만 업데이트
+  const statsEl = document.getElementById(`data-vendor-stats-${projectId}`);
+  if (statsEl) statsEl.innerHTML = buildVendorStatsBodyHtml(project);
+  const summaryEl = document.getElementById(`data-summary-${projectId}`);
+  if (summaryEl) summaryEl.innerHTML = buildProjectSummaryHtml(project);
+}
+
+function unlinkEventFromProject(projectId, eventId) {
+  const project = getProjectById(projectId);
+  if (!project) return;
+  project.linkedEventIds = (project.linkedEventIds || []).filter(id => id !== eventId);
+  if (project.sales) delete project.sales[eventId];
+  saveState();
+  renderContent();
+}
+
+function linkEventFromSelect(projectId, selectEl) {
+  const eventId = selectEl.value;
+  if (!eventId) return;
+  const project = getProjectById(projectId);
+  if (!project) return;
+  if (!project.linkedEventIds) project.linkedEventIds = [];
+  if (!project.linkedEventIds.includes(eventId)) {
+    project.linkedEventIds.push(eventId);
+    saveState();
+    renderContent();
+  }
+}
+
+function deleteProject(id) {
+  if (!confirm('이 프로젝트를 삭제할까요?')) return;
+  state.dataProjects = (state.dataProjects || []).filter(p => p.id !== id);
+  state.selectedProjectId = null;
+  saveState();
+  renderContent();
+}
+
+// ── 프로젝트 모달 ──
+function openAddProjectModal() {
+  currentProjectEditId = null;
+  _openProjectModal(null);
+}
+
+function openEditProjectModal(id) {
+  currentProjectEditId = id;
+  _openProjectModal(getProjectById(id));
+}
+
+function _openProjectModal(project) {
+  const isEdit = !!project;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'project-modal';
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal('project-modal'); });
+
+  const vendorChecks = state.labels.vendor.map(v => {
+    const c = getColor(VENDOR_COLORS, v);
+    const checked = (project?.vendors || []).includes(v) ? 'checked' : '';
+    return `<label class="pf-vendor-check">
+      <input type="checkbox" class="pf-vendor-cb" value="${v}" ${checked}>
+      <span class="chip" style="background:${c.bg};color:${c.color};border:1.5px solid ${c.border}">${v}</span>
+    </label>`;
+  }).join('');
+
+  const vendorMGRows = state.labels.vendor.map(v => {
+    const show = (project?.vendors || []).includes(v);
+    return `<div class="pf-mg-row" data-vendor="${v}" style="display:${show ? 'flex' : 'none'}">
+      <span class="pf-mg-vendor">${v}</span>
+      <input type="number" class="form-input pf-mg-input" data-vendor="${v}"
+             value="${project?.vendorMG?.[v] || ''}" min="0" placeholder="MG 수량 입력">
+    </div>`;
+  }).join('');
+
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">📊 ${isEdit ? '프로젝트 수정' : '새 프로젝트'}</div>
+        <button class="modal-close" onclick="closeModal('project-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <div class="form-label"><span class="form-label-num">1</span> 프로젝트명</div>
+          <input class="form-input" id="pf-name" type="text" placeholder="예) KM_001_일반반" value="${project?.name || ''}">
+        </div>
+        <div class="form-field">
+          <div class="form-label"><span class="form-label-num">2</span> 제작수량</div>
+          <input class="form-input" id="pf-total-qty" type="number" placeholder="예) 10000" min="0" value="${project?.totalQty || ''}">
+        </div>
+        <div class="form-field">
+          <div class="form-label"><span class="form-label-num">3</span> 판매처 선택</div>
+          <div class="pf-vendor-checks" id="pf-vendors">${vendorChecks}</div>
+        </div>
+        <div class="form-field">
+          <div class="form-label"><span class="form-label-num">4</span> 판매처별 MG수량</div>
+          <div id="pf-vendor-mg">${vendorMGRows}</div>
+          <div class="pf-hint">위에서 판매처를 선택하면 입력 항목이 나타납니다</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('project-modal')">취소</button>
+        <button class="btn btn-primary" onclick="submitProjectForm()">${isEdit ? '✔ 저장' : '＋ 추가'}</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+
+  document.querySelectorAll('.pf-vendor-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const row = document.querySelector(`#pf-vendor-mg [data-vendor="${cb.value}"]`);
+      if (row) row.style.display = cb.checked ? 'flex' : 'none';
+    });
+  });
+
+  document.getElementById('pf-name')?.focus();
+}
+
+function submitProjectForm() {
+  const nameEl = document.getElementById('pf-name');
+  const name = nameEl.value.trim();
+  if (!name) { nameEl.style.borderColor = '#ef4444'; nameEl.focus(); return; }
+  nameEl.style.borderColor = '';
+
+  const totalQty = parseInt(document.getElementById('pf-total-qty').value, 10) || 0;
+  const vendors = [];
+  document.querySelectorAll('.pf-vendor-cb:checked').forEach(cb => vendors.push(cb.value));
+  const vendorMG = {};
+  document.querySelectorAll('.pf-mg-input').forEach(inp => {
+    const v = inp.dataset.vendor;
+    const val = parseInt(inp.value, 10);
+    if (vendors.includes(v) && !isNaN(val) && val > 0) vendorMG[v] = val;
+  });
+
+  if (currentProjectEditId) {
+    const p = getProjectById(currentProjectEditId);
+    if (p) { p.name = name; p.totalQty = totalQty; p.vendors = vendors; p.vendorMG = vendorMG; }
+  } else {
+    if (!state.dataProjects) state.dataProjects = [];
+    state.dataProjects.push({ id: genProjectId(), name, totalQty, vendors, vendorMG, linkedEventIds: [], sales: {} });
+  }
+
+  saveState();
+  closeModal('project-modal');
+  renderContent();
+}
+
 // ── Sidebar mobile toggle ──
 function toggleSidebar() {
   const sb = document.getElementById('sidebar');
@@ -944,5 +1325,8 @@ Object.assign(window, {
   // 목록 선택/삭제
   toggleListSelect, toggleSelectAll, clearListSelection, deleteSelected,
   // 패널/사이드바
-  renderDetailPanel, closeDetailPanel, toggleSidebar
+  renderDetailPanel, closeDetailPanel, toggleSidebar,
+  // 데이터 프로젝트
+  selectProject, backToProjects, updateEventSales, unlinkEventFromProject,
+  linkEventFromSelect, deleteProject, openAddProjectModal, openEditProjectModal, submitProjectForm
 });
