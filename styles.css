@@ -1082,6 +1082,98 @@ body {
 }
 .data-event-select:focus { border-color: #6366f1; }
 
+/* ── 소진률 호버 툴팁 ── */
+.rate-tip-wrap {
+  position: relative;
+  cursor: help;
+}
+.rate-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f2937;
+  color: #f9fafb;
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-width: 240px;
+  max-width: 320px;
+  font-size: 12px;
+  line-height: 1.65;
+  z-index: 200;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.rate-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 7px solid transparent;
+  border-top-color: #1f2937;
+}
+.rate-tip-wrap:hover .rate-tooltip { display: block; }
+
+.rt-head {
+  font-size: 11px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.rt-section-label {
+  font-size: 10px;
+  color: #6b7280;
+  margin: 6px 0 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rt-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 1px 0;
+}
+.rt-total-row { margin-top: 4px; font-weight: 600; }
+.rt-k { color: #9ca3af; flex-shrink: 0; }
+.rt-v { color: #f3f4f6; text-align: right; }
+.rt-accent { color: #a5b4fc; }
+.rt-accent b { color: #c7d2fe; font-size: 13px; }
+.rt-ev-row {
+  font-size: 11px;
+  color: #d1d5db;
+  padding: 1px 0 1px 10px;
+}
+.rt-ev-row.rt-muted { color: #6b7280; font-style: italic; }
+.rt-divider {
+  height: 1px;
+  background: #374151;
+  margin: 7px 0;
+}
+.rt-over-note {
+  margin-top: 6px;
+  color: #fca5a5;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ── 프로젝트 카드 집계 행 ── */
+.dpc-agg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+.dpc-agg strong { color: #111; }
+.dpc-agg-sep { color: #d1d5db; }
+.dpc-agg-item strong { font-weight: 700; }
+
 /* ── 연결 해제 버튼 ── */
 .btn-unlink {
   width: 22px; height: 22px;

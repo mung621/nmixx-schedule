@@ -941,12 +941,33 @@ function calcVendorEntryStats(vendorEntry) {
     return sum + qty;
   }, 0);
   const remaining = mg - sales;
-  const rate = mg > 0 ? Math.round(sales / mg * 1000) / 10 : 0;
+  const rate = mg > 0 ? Math.floor(sales / mg * 1000) / 10 : 0;
   return { mg, sales, remaining, rate, salesDetail };
 }
 
 function getBarColor(rate) {
   return rate > 90 ? '#ef4444' : rate > 70 ? '#f59e0b' : '#10b981';
+}
+
+// 소진률 상세 툴팁 HTML
+function buildRateTooltipHtml(s) {
+  const evRows = s.salesDetail.length > 0
+    ? s.salesDetail.map(d => `<div class="rt-ev-row">${d}</div>`).join('')
+    : '<div class="rt-ev-row rt-muted">(판매 없음)</div>';
+  const overNote = s.remaining < 0
+    ? `<div class="rt-over-note">⚠ MG 초과: ${Math.abs(s.remaining).toLocaleString()}장 over</div>`
+    : '';
+  return `<div class="rate-tooltip">
+    <div class="rt-head">📊 소진률 계산식</div>
+    <div class="rt-row"><span class="rt-k">MG 수량</span><span class="rt-v">${s.mg.toLocaleString()} 장</span></div>
+    <div class="rt-section-label">판매량 내역</div>
+    ${evRows}
+    <div class="rt-row rt-total-row"><span class="rt-k">총 판매량</span><span class="rt-v">${s.sales.toLocaleString()} 장</span></div>
+    <div class="rt-divider"></div>
+    <div class="rt-row"><span class="rt-k">소진률</span><span class="rt-v rt-accent">${s.sales.toLocaleString()} ÷ ${s.mg.toLocaleString()} × 100 = <b>${s.rate}%</b></span></div>
+    <div class="rt-row"><span class="rt-k">잔여수량</span><span class="rt-v">${s.mg.toLocaleString()} − ${s.sales.toLocaleString()} = ${s.remaining.toLocaleString()} 장</span></div>
+    ${overNote}
+  </div>`;
 }
 
 // ── Step 1: 프로젝트 목록 ──
@@ -979,8 +1000,13 @@ function renderDataHtml() {
 
   const cardsHtml = projects.map(project => {
     const vendors = project.vendors || [];
-    const barsHtml = vendors.map(ve => {
-      const s = calcVendorEntryStats(ve);
+    const allStats = vendors.map(ve => calcVendorEntryStats(ve));
+    const totalMG    = allStats.reduce((sum, s) => sum + s.mg, 0);
+    const totalSales = allStats.reduce((sum, s) => sum + s.sales, 0);
+    const totalRate  = totalMG > 0 ? Math.floor(totalSales / totalMG * 1000) / 10 : 0;
+    const totalBc    = getBarColor(totalRate);
+    const barsHtml = vendors.map((ve, i) => {
+      const s = allStats[i];
       const bc = getBarColor(s.rate);
       return `<div class="dpc-bar-row">
         <span class="dpc-bar-vendor">${ve.vendor}</span>
@@ -992,6 +1018,11 @@ function renderDataHtml() {
     return `<div class="data-project-card" onclick="selectProject('${project.id}')">
       <div class="dpc-name">${project.name || '(이름 없음)'}</div>
       <div class="dpc-total">제작수량 <strong>${(Number(project.totalQty)||0).toLocaleString()}</strong></div>
+      ${vendors.length > 0 ? `<div class="dpc-agg">
+        <span class="dpc-agg-item">총 MG: <strong>${totalMG.toLocaleString()}</strong></span>
+        <span class="dpc-agg-sep">·</span>
+        <span class="dpc-agg-item" style="color:${totalBc}">총 소진률: <strong>${totalRate}%</strong></span>
+      </div>` : ''}
       <div class="dpc-chips">${vendors.map(ve => chipHtml(ve.vendor, VENDOR_COLORS)).join('')}</div>
       ${barsHtml ? `<div class="dpc-bars">${barsHtml}</div>` : ''}
       <div class="dpc-footer">${vendors.length}개 판매처 · ${totalEvents}개 이벤트</div>
@@ -1024,9 +1055,6 @@ function renderProjectDetailHtml(project) {
       ? `판매량 계산: ${s.salesDetail.join(' + ')} = ${s.sales.toLocaleString()}`
       : '판매 없음';
     const remainTitle = `잔여수량: MG수량(${s.mg.toLocaleString()}) - 판매량(${s.sales.toLocaleString()}) = ${s.remaining.toLocaleString()}`;
-    const rateTitle   = s.mg > 0
-      ? `소진률: 판매량(${s.sales.toLocaleString()}) ÷ MG수량(${s.mg.toLocaleString()}) × 100 = ${s.rate}%`
-      : '판매 없음';
     return `<div class="data-vendor-card" onclick="selectVendorEntry('${ve.id}')">
       <div class="dvc-header">
         <span class="chip" style="background:${c.bg};color:${c.color};border:1.5px solid ${c.border}">${ve.vendor}</span>
@@ -1037,9 +1065,10 @@ function renderProjectDetailHtml(project) {
         <div class="dvc-stat" title="${salesTitle}"><div class="dvc-stat-label">판매량</div><div class="dvc-stat-val" style="color:${s.sales>0?'#6366f1':'#9ca3af'}">${s.sales.toLocaleString()}</div></div>
         <div class="dvc-stat" title="${remainTitle}"><div class="dvc-stat-label">잔여</div><div class="dvc-stat-val" style="color:${s.remaining<0?'#ef4444':'#374151'}">${s.remaining.toLocaleString()}</div></div>
       </div>
-      <div class="dvc-progress-row" title="${rateTitle}">
+      <div class="dvc-progress-row rate-tip-wrap">
         <div class="dvc-bar-track"><div class="dvc-bar-fill" style="width:${Math.min(s.rate,100)}%;background:${bc}"></div></div>
         <span class="dvc-rate" style="color:${bc}">${s.rate}%</span>
+        ${buildRateTooltipHtml(s)}
       </div>
       <div class="dvc-footer">${(ve.linkedEventIds||[]).length}개 이벤트 연결됨</div>
     </div>`;
@@ -1136,9 +1165,10 @@ function renderVendorDetailHtml(project, vendorEntry) {
         <div class="dvsh-label">잔여수량</div>
         <div class="dvsh-value">${s.remaining.toLocaleString()}</div>
       </div>
-      <div class="dvsh-stat" title="${rateTitle}">
+      <div class="dvsh-stat rate-tip-wrap">
         <div class="dvsh-label">소진률</div>
         <div class="dvsh-value" style="color:${bc}">${s.rate}%</div>
+        ${buildRateTooltipHtml(s)}
       </div>
     </div>
     <div class="dvsh-bar-wrap" title="${rateTitle}">
@@ -1194,23 +1224,7 @@ function updateEventSales(projectId, vendorEntryId, eventId, value) {
   if (isNaN(qty) || qty < 0) delete ve.sales[eventId];
   else ve.sales[eventId] = qty;
   saveState();
-
-  // 입력 포커스 유지를 위해 hero 통계만 업데이트
-  const s = calcVendorEntryStats(ve);
-  const bc = getBarColor(s.rate);
-  const heroEl = document.querySelector('.data-vendor-stats-hero');
-  if (heroEl) {
-    const st = s.salesDetail.length > 0 ? `판매량 계산: ${s.salesDetail.join(' + ')} = ${s.sales.toLocaleString()}` : '판매 없음';
-    const rt = `잔여수량: MG수량(${s.mg.toLocaleString()}) - 판매량(${s.sales.toLocaleString()}) = ${s.remaining.toLocaleString()}`;
-    const pt = `소진률: 판매량(${s.sales.toLocaleString()}) ÷ MG수량(${s.mg.toLocaleString()}) × 100 = ${s.rate}%`;
-    heroEl.innerHTML = `
-      <div class="dvsh-stat"><div class="dvsh-label">MG수량</div><div class="dvsh-value">${s.mg.toLocaleString()}</div></div>
-      <div class="dvsh-stat" title="${st}"><div class="dvsh-label">판매량</div><div class="dvsh-value" style="color:#6366f1">${s.sales.toLocaleString()}</div></div>
-      <div class="dvsh-stat ${s.remaining<0?'dvsh-over':''}" title="${rt}"><div class="dvsh-label">잔여수량</div><div class="dvsh-value">${s.remaining.toLocaleString()}</div></div>
-      <div class="dvsh-stat" title="${pt}"><div class="dvsh-label">소진률</div><div class="dvsh-value" style="color:${bc}">${s.rate}%</div></div>`;
-    const fill = document.querySelector('.dvsh-bar-fill');
-    if (fill) { fill.style.width = Math.min(s.rate,100)+'%'; fill.style.background = bc; }
-  }
+  renderContent();
 }
 
 function unlinkEventFromVendor(projectId, vendorEntryId, eventId) {
