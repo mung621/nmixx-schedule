@@ -1084,7 +1084,8 @@ function renderVendorDetailHtml(project, vendorEntry) {
     : '판매 없음';
 
   const linkedIds = new Set(vendorEntry.linkedEventIds || []);
-  const availableEvents = state.events.filter(e => !linkedIds.has(e.id));
+  // 해당 판매처로 등록된 이벤트만 드롭박스에 표시
+  const availableEvents = state.events.filter(e => !linkedIds.has(e.id) && e.vendor === vendorEntry.vendor);
 
   const eventsBodyHtml = (vendorEntry.linkedEventIds || []).map(eid => {
     const ev = state.events.find(e => e.id === eid);
@@ -1094,11 +1095,14 @@ function renderVendorDetailHtml(project, vendorEntry) {
     const inputTitle = contribPct !== null
       ? `이 이벤트 기여율: ${Number(qty).toLocaleString()} ÷ ${s.mg.toLocaleString()} × 100 = ${contribPct}%`
       : '판매량을 입력하세요';
+    const safeName = (ev.name||'(이름 없음)').replace(/"/g, '&quot;');
     return `<tr>
       <td><span class="event-emoji-badge">${ev.emoji||'📅'}</span> <strong>${ev.name||'(이름 없음)'}</strong></td>
       <td><input type="number" class="data-sales-input" value="${qty}" min="0" placeholder="판매량"
             title="${inputTitle}"
-            onchange="updateEventSales('${project.id}','${vendorEntry.id}','${eid}',this.value)"></td>
+            data-orig-value="${qty}"
+            data-event-name="${safeName}"
+            onchange="confirmEventSales('${project.id}','${vendorEntry.id}','${eid}',this)"></td>
       <td><button class="btn-unlink" onclick="unlinkEventFromVendor('${project.id}','${vendorEntry.id}','${eid}')" title="연결 해제">✕</button></td>
     </tr>`;
   }).join('');
@@ -1164,6 +1168,21 @@ function selectProject(id)     { state.selectedProjectId = id; state.selectedVen
 function backToProjects()       { state.selectedProjectId = null; state.selectedVendorId = null; renderContent(); }
 function selectVendorEntry(vid) { state.selectedVendorId = vid; renderContent(); }
 function backToProject()        { state.selectedVendorId = null; renderContent(); }
+
+function confirmEventSales(projectId, vendorEntryId, eventId, inputEl) {
+  const newVal = inputEl.value;
+  const origVal = inputEl.dataset.origValue ?? '';
+  if (newVal === origVal) return;
+  const eventName = inputEl.dataset.eventName || '이벤트';
+  const origDisplay = origVal === '' ? '미입력' : Number(origVal).toLocaleString();
+  const newDisplay  = newVal  === '' ? '삭제'   : Number(newVal).toLocaleString();
+  if (confirm(`"${eventName}" 판매량을 수정하시겠습니까?\n\n이전: ${origDisplay} → 수정: ${newDisplay}`)) {
+    updateEventSales(projectId, vendorEntryId, eventId, newVal);
+    inputEl.dataset.origValue = newVal;
+  } else {
+    inputEl.value = origVal;
+  }
+}
 
 function updateEventSales(projectId, vendorEntryId, eventId, value) {
   const project = getProjectById(projectId);
@@ -1381,7 +1400,7 @@ Object.assign(window, {
   renderDetailPanel, closeDetailPanel, toggleSidebar,
   // 데이터 프로젝트
   selectProject, backToProjects, selectVendorEntry, backToProject,
-  updateEventSales, unlinkEventFromVendor, linkEventToVendor,
+  confirmEventSales, updateEventSales, unlinkEventFromVendor, linkEventToVendor,
   deleteVendorEntry, deleteProject,
   openAddProjectModal, openEditProjectModal, submitProjectForm,
   openAddVendorModal, openEditVendorModal, submitVendorForm
